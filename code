@@ -1,0 +1,47 @@
+# Association of dietary protein intake with accelerated biological aging and all-cause and cause-specific mortality
+# Data Analysis: Juan Reyes Barrera, Omar Yaxmehen Bello-Chavolla and Neftali Eduardo Antonio Villa
+# Latest version of Analysis 1 November of 2025
+# Any question regarding analysis contact Juan Reyes Barrera at reyesbarrera_juan@hotmail.com
+
+####---- Library----####
+
+library(dplyr)
+library(tidyverse)
+library(readxl)
+library(haven)
+library(ggthemes)
+library(ggpubr)
+library(readr)
+library(survival)
+library(jtools)
+library(gtsummary)
+library(data.table)
+library(epiR)
+library(MASS)
+library(glmnet)
+library(pROC)
+library(caret)
+library(splines)
+library(cliot)
+library(rms)
+library(ggsci)
+library(OptimalCutpoints)
+library(GGally)
+library(moments)
+library(nortest)
+library(rmda)       
+library(ggplot2)   
+library(ggpubr)    
+library(ggplotify)      
+library(mice)
+library(DataExplorer)
+library(flextable)
+library(officer)
+library(caret)
+library(e1071)
+library(recipes)
+library(broom)
+library(caret) 
+library(pROC) 
+
+
