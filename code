@@ -44,4 +44,291 @@ library(broom)
 library(caret) 
 library(pROC) 
 
+####Cargando bases de datos NHANES 1999-2000 Y 2001-2002###
+
+ruta_carpeta <- "C:/Users/Usuario/Desktop/Analisis proteinas/analisis_proteinas_compartido"
+
+# Obtener la lista de archivos .sav en la carpeta
+archivos_sav <- list.files(path = ruta_carpeta, pattern = "\\.sav$", full.names = TRUE)
+
+# Importar todas las bases y guardarlas en una lista con nombres según el archivo
+lista_bases <- setNames(lapply(archivos_sav, read_sav), tools::file_path_sans_ext(basename(archivos_sav)))
+
+# Renombrar las variables de cada base usando sus labels (si existen)
+lista_bases <- lapply(lista_bases, function(df) {
+  names(df) <- sapply(df, function(x) {
+    if (!is.null(attr(x, "label"))) {
+      attr(x, "label")  # Usa el label si existe
+    } else {
+      names(df)[which(df == x)]  # Mantiene el nombre original si no hay label
+    }
+  })
+  df  # Retorna el data frame modificado
+})
+
+# (Opcional) Crear cada base como un objeto separado en el entorno global
+for (i in seq_along(lista_bases)) {
+  assign(names(lista_bases)[i], lista_bases[[i]])
+}
+
+
+
+
+## Reduccion de varibles en comun en cada set ###
+
+## BMX ##
+vars_comunes <- intersect(names(BMX), names(BMX_B))
+BMX <- BMX[, vars_comunes, drop = FALSE]
+BMX_B <- BMX_B[, vars_comunes, drop = FALSE]
+BMX_total <- bind_rows(BMX, BMX_B)
+
+## BPX ##
+vars_comunes <- intersect(names(BPX), names(BPX_B))
+BPX <- BPX[, vars_comunes, drop = FALSE]
+BPX_B <- BPX_B[, vars_comunes, drop = FALSE]
+BPX_total <- bind_rows(BPX, BPX_B)
+
+## DEMO ##
+vars_comunes <- intersect(names(DEMO), names(DEMO_B))
+DEMO <- DEMO[, vars_comunes, drop = FALSE]
+DEMO_B <- DEMO_B[, vars_comunes, drop = FALSE]
+DEMO_total <- bind_rows(DEMO, DEMO_B)
+
+## DRXTOT ##
+vars_comunes <- intersect(names(DRXTOT), names(DRXTOT_B))
+DRXTOT <- DRXTOT[, vars_comunes, drop = FALSE]
+DRXTOT_B <- DRXTOT_B[, vars_comunes, drop = FALSE]
+DRXTOT_total <- bind_rows(DRXTOT, DRXTOT_B)
+
+
+
+
+## L11 ##
+names(LAB11) <- trimws(names(LAB11))
+names(L11_2_B) <- trimws(names(L11_2_B))
+vars_comunes <- intersect(names(LAB11), names(L11_2_B))
+LAB11 <- LAB11[, vars_comunes, drop = FALSE]
+L11_2_B <- L11_2_B[, vars_comunes, drop = FALSE]
+L11_total <- bind_rows(LAB11, L11_2_B)
+
+## L13 ##
+vars_comunes <- intersect(names(LAB13), names(L13_B))
+LAB13 <- LAB13[, vars_comunes, drop = FALSE]
+L13_B <- L13_B[, vars_comunes, drop = FALSE]
+L13_total <- bind_rows(L13_B,LAB13)
+
+
+## L25 ##
+vars_comunes <- intersect(names(LAB25), names(L25_B))
+LAB25 <- LAB25[, vars_comunes, drop = FALSE]
+L25_B <- L25_B[, vars_comunes, drop = FALSE]
+L25_total <- bind_rows(L25_B,LAB25)
+
+
+## L40 ##
+vars_comunes <- intersect(names(L40_2_B), names(LAB18))
+LAB18 <- LAB18[, vars_comunes, drop = FALSE]
+L40_2_B <- L40_2_B[, vars_comunes, drop = FALSE]
+L40_total<- bind_rows(L40_2_B,LAB18)
+
+
+
+## LAB 10##
+names(LAB10) <- gsub(":", " ", names(LAB10))
+vars_comunes <- intersect(names(LAB10), names(LAB10_B))
+LAB10 <- LAB10[, vars_comunes, drop = FALSE]
+LAB10_B <- LAB10_B[, vars_comunes, drop = FALSE]
+LAB10_total<- bind_rows(LAB10,LAB10_B)
+
+
+## TELO##
+vars_comunes <- intersect(names(TELO_A), names(TELO_B))
+TELO_A <- TELO_A[, vars_comunes, drop = FALSE]
+TELO_B <- TELO_B[, vars_comunes, drop = FALSE]
+TELO_total<- bind_rows(TELO_A,TELO_B)
+
+
+
+## PAIQF##
+vars_comunes <- intersect(names(PAQIAF), names(PAQIAF_B))
+PAQIAF <- PAQIAF[, vars_comunes, drop = FALSE]
+PAQIAF_B <- PAQIAF_B[, vars_comunes, drop = FALSE]
+PAQIAF_total<- bind_rows(PAQIAF,PAQIAF_B)
+
+## DIQ##
+vars_comunes <- intersect(names(DIQ), names(DIQ_B))
+DIQ <- DIQ[, vars_comunes, drop = FALSE]
+DIQ_B <- DIQ_B[, vars_comunes, drop = FALSE]
+DIQ_total<- bind_rows(DIQ,DIQ_B)
+
+## SMQ##
+vars_comunes <- intersect(names(SMQ), names(SMQ_B))
+SMQ <- SMQ[, vars_comunes, drop = FALSE]
+SMQ_B <- SMQ_B[, vars_comunes, drop = FALSE]
+SMQ_total<- bind_rows(SMQ,SMQ_B)
+
+## BPQ##
+vars_comunes <- intersect(names(BPQ), names(BPQ_B))
+BPQ <- BPQ[, vars_comunes, drop = FALSE]
+BPQ_B <- BPQ_B[, vars_comunes, drop = FALSE]
+BPQ_total<- bind_rows(BPQ,BPQ_B)
+
+
+
+## Unir los data frames con full_join() usando el identificador común##
+
+df_final <- BMX_total %>%
+  full_join(BPX_total, by = "ID") %>%
+  full_join(DEMO_total, by = "ID") %>%
+  full_join(DRXTOT_total, by = "ID") %>%
+  full_join(TELO_total, by = "ID") %>%
+  full_join(L11_total, by = "ID") %>%
+  full_join(L13_total, by = "ID") %>%
+  full_join(L25_total, by = "ID") %>%
+  full_join(LAB10_total, by = "ID") %>%
+  full_join(PAQIAF_total, by = "ID") %>%
+  full_join(DIQ_total, by = "ID") %>%
+  full_join(SMQ_total, by = "ID") %>%
+  full_join(BPQ_total, by = "ID") %>%
+  full_join(L40_total, by = "ID") 
+
+
+### Filtros ###
+
+
+df_final <- df_final %>%
+  filter(`Age at Screening Adjudicated - Recode` > 20)
+
+df_final <- df_final %>%
+  filter(!is.na(`Protein (gm)`))
+
+df_final <- df_final %>%
+  filter(!is.na(`Mean T/S ratio`))
+
+
+## codificacion de variables para calcular anthropoage ##
+
+
+table (df_final$`Race/Ethnicity - Recode`)
+df_final$ID
+
+# Recodificar la variable 'Race/Hispanic origin' según la nueva codificación
+df_final$`Race/Ethnicity - Recode` <- factor(df_final$`Race/Ethnicity - Recode`,
+                                             levels = c(1, 2, 3, 4, 5),
+                                             labels = c("Mexican-American", "Other Hispanic", 
+                                                        "Non-Hispanic White", "Non-Hispanic Black", 
+                                                        "Other Race - Including Multi-Racial"))
+
+
+
+df_final <- df_final %>%
+  mutate(`Race/Ethnicity - Recode` = case_when(
+    `Race/Ethnicity - Recode` %in% c("Other Hispanic", "Other Race - Including Multi-Racial") ~ "Other",
+    TRUE ~ `Race/Ethnicity - Recode`
+  ))
+
+df_final <- df_final %>%
+  mutate(Ethnicity = case_when(
+    `Race/Ethnicity - Recode` == "Non-Hispanic White" ~ "White",
+    `Race/Ethnicity - Recode` == "Non-Hispanic Black" ~ "Black",
+    `Race/Ethnicity - Recode` == "Mexican-American" ~ "Mexican-American",
+    TRUE ~ "Others"
+  ))
+
+df_final$Ethnicity <- recode(df_final$Ethnicity, "Others" = "Other")
+
+df_final$Ethnicity <- factor(df_final$Ethnicity, levels = c("White", "Black", "Mexican-American", "Others"))
+
+table(df_final$Ethnicity)
+
+df_final <- df_final %>%
+  mutate(Gender = recode(Gender, `1` = "Men", `2` = "Women"))
+df_final$Gender <- factor(df_final$Gender, levels = c( "Women","Men"))
+
+df_final <- df_final %>%
+  mutate(`Standing Height (m)` = `Standing Height (cm)` / 100)
+
+# Definir el requerimiento proteico de cada participante (0.8 g/kg)
+df_final$protein_requirement <- df_final$`Weight (kg)` * 0.8
+
+# Comparar si la proteína consumida cumple con el requerimiento
+df_final$protein_status <- ifelse(df_final$`Protein (gm)` >= df_final$protein_requirement, 
+                                  "Cumple con requerimiento", 
+                                  "No cumple con requerimiento")
+
+# Crear cuartiles de la variable 'Mean T/S ratio'
+df_final$QTel <- cut(df_final$`Mean T/S ratio`, 
+                     breaks = quantile(df_final$`Mean T/S ratio`, probs = seq(0, 1, 0.25), na.rm = TRUE), 
+                     include.lowest = TRUE, 
+                     labels = c("Q1", "Q2", "Q3", "Q4"))
+
+hist(df_filter$QTel)
+####calculo de anthropage###
+
+df_final$AnthropoAge <- AnthropoAgeR::s_anthropoage(
+  Age=df_final$`Age at Screening Adjudicated - Recode`,
+  Sex=df_final$Gender,
+  Weight=df_final$`Weight (kg)`,
+  Waist=df_final$`Waist Circumference (cm)`,
+  Height=df_final$`Standing Height (m)`,
+  Ethnicity=df_final$Ethnicity
+)
+
+
+
+
+###calculo de phenoage ###
+
+df_final$Phenoage<- phenoage(df_final$`Age at Screening Adjudicated - Recode`,df_final$`C-reactive protein(mg/dL)`,
+                             df_final$`Lymphocyte percent (%)`, df_final$`White blood cell count (SI)`,
+                             df_final$`Glucose (mg/dL)`, df_final$`Red cell distribution width (%)`,
+                             df_final$`Albumin (g/dL)`,df_final$`Creatinine (mg/dL)`,
+                             df_final$`Mean cell volume (fL)`, df_final$`Alkaline phosphotase (U/L)`)
+
+
+df_final$P
+
+##filtro de base para  solo datos completos de relojes biologicos ##
+  
+  colSums(is.na(df_final[, c("Age at Screening Adjudicated - Recode", "Gender","AnthropoAge","Mean T/S ratio")]))
+  
+  df_filter <- df_final[complete.cases(df_final[, c( "AnthropoAge","Mean T/S ratio")]), ]
+  
+
+
+### metrica de aceleracion ###
+
+  
+  library(AnthropoAgeR)
+table(df_filter$`Race/Ethnicity - Recode`)
+  
+    df_filter$accel_antro <- age_accel(Age = df_filter$`Age at Screening Adjudicated - Recode`, 
+                                     BA = df_filter$AnthropoAge,
+                                     Sex = df_filter$Gender)
+  
+    
+    df_filter$accel_antro
+  df_filter$accel_phen <- age_accel(Age = df_filter$`Age at Screening Adjudicated - Recode`, 
+                                    BA = df_filter$Phenoage,
+                                    Sex = df_filter$Gender)
+  
+  #Crear la variable categórica "accel_category"#
+  
+  df_filter$accel_category_anthr <- ifelse(df_filter$accel_antro >= 0, "Aging Accelerated", "Aging Non-Accelerated")
+  
+  df_filter$accel_category_phe <- ifelse(df_filter$accel_phen >= 0, "Aging Accelerated", "Aging Non-Accelerated")
+
+  
+  ## CREACION DE CUARTILES DE PROTEINA Y VARIBLE DICOTOMICA: ARRIBA A ABAJO DE LA MEDIANA ##
+  
+  summary(df_filter$`Protein (gm)`)
+  
+  df_filter$Protein_quartile <- cut(df_filter$`Protein (gm)`, 
+                                    breaks = quantile(df_filter$`Protein (gm)`, probs = c(0, 0.25, 0.50, 0.75, 1), na.rm = TRUE),
+                                    include.lowest = TRUE,
+                                    labels = c("Q1", "Q2", "Q3", "Q4"))
+  df_filter$Protein_median <- ifelse(df_filter$`Protein (gm)` <= median(df_filter$`Protein (gm)`, na.rm = TRUE), 
+                                     "Below Median", 
+                                     "Above Median")
+  
 
