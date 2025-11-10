@@ -366,15 +366,61 @@ df_filtered$Telomere_status <- ifelse(df_filtered$`Mean T/S ratio` < p25,
 
 ### metrica de aceleracion categoricas ###
 
-  
-  library(AnthropoAgeR)
-  
-    df_filter$accel_antro <- age_accel(Age = df_filter$`Age at Screening Adjudicated - Recode`, 
-                                     BA = df_filter$AnthropoAge,
-                                     Sex = df_filter$Gender)
+  AnthropoAge acceleration
+df_final$Accel_AnthropoAge <- AnthropoAgeR::age_accel(
+  Age = df_final$`Age at Screening Adjudicated - Recode`,
+  BA  = df_final$AnthropoAge,
+  Sex = df_final$Gender
+)
+
+# PhenoAge acceleration
+df_final$Accel_PhenoAge <- BioAge::age_accel(
+  chron_age = df_final$`Age at Screening Adjudicated - Recode`,
+  bio_age   = df_final$PhenoAge
+)
+
+# KDM acceleration
+df_final$Accel_KDM <- BioAge::age_accel(
+  chron_age = df_final$`Age at Screening Adjudicated - Recode`,
+  bio_age   = df_final$KDM
 
 
+###  Correlación entre métricas de edad biológica y edad cronológica  ##
+df_corr <- df_final[, c(
+  "Age at Screening Adjudicated - Recode",
+  "Mean T/S ratio",
+  "AnthropoAge",
+  "PhenoAge",
+  "KDM"
+)]
 
+df_corr <- df_corr %>%
+  rename(
+    ChronAge = `Age at Screening Adjudicated - Recode`,
+    Telomere = `Mean T/S ratio`
+  )
+ggpairs(df_corr,
+        lower = list(continuous = wrap("points", color = "black")),
+        upper = list(continuous = wrap("cor", size = 5)),
+        diag = list(continuous = wrap("barDiag", fill = "gray"))) +
+  theme_minimal() +
+  labs(title = "Correlación entre edad cronológica y métricas de edad biológica")
+
+metrics <- c("Telomere", "AnthropoAge", "PhenoAge", "KDM")
+
+cor_results <- data.frame(Variable = metrics, r = NA, p_value = NA)
+
+for (i in seq_along(metrics)) {
+  cor_test <- cor.test(df_corr[[metrics[i]]], df_corr$ChronAge, method = "spearman")
+  cor_results$r[i] <- cor_test$estimate
+  cor_results$p_value[i] <- cor_test$p.value
+}
+
+cor_results <- cor_results %>%
+  mutate(
+    r = round(r, 3),
+    p_value = format.pval(p_value, digits = 3, scientific = TRUE)
+  )
 
 
 
