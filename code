@@ -319,16 +319,79 @@ table(df_filter$`Race/Ethnicity - Recode`)
   df_filter$accel_category_phe <- ifelse(df_filter$accel_phen >= 0, "Aging Accelerated", "Aging Non-Accelerated")
 
   
-  ## CREACION DE CUARTILES DE PROTEINA Y VARIBLE DICOTOMICA: ARRIBA A ABAJO DE LA MEDIANA ##
+  ## CREACION DE CUARTILES DE PROTEINA  ##
   
-  summary(df_filter$`Protein (gm)`)
+ # Crear la columna 'Protein_quartile' con los valores correctos de los cuartiles
+df_filter$Protein_quartile <- cut(df_filter$`Protein (gm)`,
+                                  breaks = quantiles_protein,
+                                  include.lowest = TRUE,
+                                  labels = c("Q1", "Q2", "Q3", "Q4"))
+
+
+
+
+### metricas de edad biologica ###
+
+####calculo de anthropage###
+
+df_final$AnthropoAge <- AnthropoAgeR::s_anthropoage(
+  Age=df_final$`Age at Screening Adjudicated - Recode`,
+  Sex=df_final$Gender,
+  Weight=df_final$`Weight (kg)`,
+  Waist=df_final$`Waist Circumference (cm)`,
+  Height=df_final$`Standing Height (m)`,
+  Ethnicity=df_final$Ethnicity
+)
+
+###calculo de phenoage ###
+
+df_final$Phenoage<- phenoage(df_final$`Age at Screening Adjudicated - Recode`,df_final$`C-reactive protein(mg/dL)`,
+                             df_final$`Lymphocyte percent (%)`, df_final$`White blood cell count (SI)`,
+                             df_final$`Glucose (mg/dL)`, df_final$`Red cell distribution width (%)`,
+                             df_final$`Albumin (g/dL)`,df_final$`Creatinine (mg/dL)`,
+                             df_final$`Mean cell volume (fL)`, df_final$`Alkaline phosphotase (U/L)`)
+
+#KDM using NHANES ##
+kdm = kdm_nhanes(biomarkers=c("fev","sbp","totchol","hba1c","albumin","creat","lncrp","alp","bun"))
+
+
+# calculo telomeros cortos #
+p25 <- quantile(df_filtered$`Mean T/S ratio`, 0.25, na.rm = TRUE)
+
+# Crear/redefinir Telomere_status
+df_filtered$Telomere_status <- ifelse(df_filtered$`Mean T/S ratio` < p25, 
+                                      "Low (<P25)", 
+                                      "High (≥P25)")
+
+
+### metrica de aceleracion categoricas ###
+
   
-  df_filter$Protein_quartile <- cut(df_filter$`Protein (gm)`, 
-                                    breaks = quantile(df_filter$`Protein (gm)`, probs = c(0, 0.25, 0.50, 0.75, 1), na.rm = TRUE),
-                                    include.lowest = TRUE,
-                                    labels = c("Q1", "Q2", "Q3", "Q4"))
-  df_filter$Protein_median <- ifelse(df_filter$`Protein (gm)` <= median(df_filter$`Protein (gm)`, na.rm = TRUE), 
-                                     "Below Median", 
-                                     "Above Median")
+  library(AnthropoAgeR)
   
+    df_filter$accel_antro <- age_accel(Age = df_filter$`Age at Screening Adjudicated - Recode`, 
+                                     BA = df_filter$AnthropoAge,
+                                     Sex = df_filter$Gender)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
