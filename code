@@ -670,6 +670,82 @@ results_all <- results_all %>%
   ) %>%
   select(Model, Type, term, HR_CI, Sig)
 
+# Librerías necesarias
+library(survival)
+library(dplyr)
+
+# Asumimos que ya tienes df_filter3 con variables limpias
+# y que 'mediation_ci1' es tu función personalizada
+
+# Re-codificaciones básicas
+df_filter3 <- df_filter3 %>%
+  rename(
+    Energy_kcal = `Energy (kcal)`,
+    Family_PIR = `Family PIR`,
+    Race = `Race/Ethnicity - Recode`,
+    Diabetes_h = `Doctor told you have diabetes`,
+    Activity = `Activity level`,
+    Hypertension = `Ever told you had high blood pressure`,
+    Smoking = `Do you now smoke cigarettes`
+  )
+
+# Crear variable binaria de actividad
+df_filter3 <- df_filter3 %>%
+  mutate(Activity_binary = ifelse(Activity == "Moderate", 1,
+                                  ifelse(Activity == "Low", 0, NA)))
+
+# FUNCIÓN PARA UN MEDIADOR
+
+run_mediation <- function(mediator_var, data, method = "Cox") {
+
+  # Modelo 1: mediador ~ exposición + covariables
+  glm1 <- glm(scale(data[[mediator_var]]) ~ scale(protein_per_kg_per_day) +
+                Gender + residuos + Energy_kcal + Race + 
+                Diabetes_h + Activity_binary + Hypertension + Smoking + Family_PIR,
+              data = data)
+
+  # Modelo 2: mortalidad ~ exposición + mediador + covariables
+  m2 <- coxph(Surv(permth_int, mortstat) ~ scale(data[[mediator_var]]) + 
+                scale(protein_per_kg_per_day) + Gender + residuos + Energy_kcal +
+                Race + Diabetes_h + Activity_binary + Hypertension + Smoking + Family_PIR,
+              data = data)
+
+  # Extraer coeficientes y varianzas
+  if (method == "Cox") {
+    lambdas <- m2$coefficients
+    lambdas.var <- m2$var
+  } else if (method == "Aalen") {
+    lambdas <- aalen2$gamma
+    lambdas.var <- aalen2$robvar.gamma
+  }
+
+  # Calcular efectos de mediación con tu función
+  results <- mediation_ci1(
+    a = lambdas[2],         # efecto directo (exposición)
+    b = lambdas[1],         # efecto mediador
+    var_a = lambdas.var[2,2],
+    cov_ab = lambdas.var[2,1],
+    var_b = lambdas.var[1,1],
+    beta_m = glm1$coef[2],  # efecto exposición→mediador
+    var_beta_m = vcov(glm1)[2,2],
+    G = 10^6,
+    method = method
+  )
+
+  return(results)
+}
+
+mediators <- c("Mean T/S ratio", "AnthropoAge", "phenoage0", "kdm")
+
+mediation_results <- lapply(mediators, function(med) {
+  res <- run_mediation(med, df_filter3, method = "Cox")
+  data.frame(Mediator = med, res)
+})
+
+# Combinar en un solo data frame
+mediation_results_df <- do.call(rbind, mediation_results)
+
+print(mediation_results_df)
 
 
 
