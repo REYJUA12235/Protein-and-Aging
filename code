@@ -424,10 +424,155 @@ cor_results <- cor_results %>%
 
 
 
+# Table 2 
+
+# Función para obtener mediana (IQR)
+summary_iqr <- function(data, variable){
+  data %>%
+    group_by(Protein_Quintiles) %>%
+    summarise(
+      Median = median({{ variable }}, na.rm = TRUE),
+      Q1 = quantile({{ variable }}, 0.25, na.rm = TRUE),
+      Q3 = quantile({{ variable }}, 0.75, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(Median_IQR = paste0(round(Median, 2), " (", round(Q1, 2), ", ", round(Q3, 2), ")"))
+}
+
+# Función para obtener conteos y porcentajes
+summary_percent <- function(data, variable_cat){
+  data %>%
+    group_by(Protein_Quintiles, {{ variable_cat }}) %>%
+    summarise(n = n(), .groups = "drop") %>%
+    group_by(Protein_Quintiles) %>%
+    mutate(percentage = round(100 * n / sum(n), 1)) %>%
+    filter({{ variable_cat }} == 1) %>%  # Asume "1" = acelerado
+    mutate(N_percent = paste0(n, " (", percentage, ")"))
+}
+
+# Telomere length
+TL_summary <- summary_iqr(df_filtered, QTel)
+print(TL_summary)
+kruskal.test(QTel ~ Protein_Quintiles, data = df_filtered)
+
+# AnthropoAge
+Anthro_summary <- summary_iqr(df_filtered, anthropoage0)
+print(Anthro_summary)
+kruskal.test(anthropoage0 ~ Protein_Quintiles, data = df_filtered)
+
+# PhenoAge
+Pheno_summary <- summary_iqr(df_filtered, phenoage0)
+print(Pheno_summary)
+kruskal.test(phenoage0 ~ Protein_Quintiles, data = df_filtered)
+
+# KDM
+KDM_summary <- summary_iqr(df_filtered, kdm)
+print(KDM_summary)
+kruskal.test(kdm ~ Protein_Quintiles, data = df_filtered)
+
+# Telomere acceleration
+TL_accel <- summary_percent(df_filtered, accel_category_TL)
+print(TL_accel)
+chisq.test(table(df_filtered$Protein_Quintiles, df_filtered$accel_category_TL))
+
+# AnthropoAge acceleration
+Anthro_accel <- summary_percent(df_filtered, accel_category_anthr)
+print(Anthro_accel)
+chisq.test(table(df_filtered$Protein_Quintiles, df_filtered$accel_category_anthr))
+
+# PhenoAge acceleration
+Pheno_accel <- summary_percent(df_filtered, phenoage_category)
+print(Pheno_accel)
+chisq.test(table(df_filtered$Protein_Quintiles, df_filtered$phenoage_category))
+
+# KDM acceleration
+KDM_accel <- summary_percent(df_filtered, kdm_category)
+print(KDM_accel)
+chisq.test(table(df_filtered$Protein_Quintiles, df_filtered$kdm_category))
+
+# TABLE 3: Linear regression models
+
+
+# Lista de desenlaces continuos
+outcomes_cont <- c("QTel", "AnthropoAge", "PhenoAge", "kdm")
+
+# Función para ajustar modelos lineales
+fit_lm_models <- function(data, outcome) {
+  # No ajustado
+  model_unadj <- lm(as.formula(paste(outcome, "~ Protein_Quintiles + Protein_gkg_day")), data = data)
+  # Ajustado
+  model_adj <- lm(as.formula(paste(outcome, "~ Protein_Quintiles + Protein_gkg_day + age + sex + energy_kcal + ethnicity + poverty_ratio + smoking_status + physical_activity + hypertension + diabetes")), 
+                  data = data)
+  
+  # Extraer resultados
+  tidy_unadj <- broom::tidy(model_unadj, conf.int = TRUE) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(Model = "Unadjusted", Outcome = outcome)
+  
+  tidy_adj <- broom::tidy(model_adj, conf.int = TRUE) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(Model = "Adjusted", Outcome = outcome)
+  
+  bind_rows(tidy_unadj, tidy_adj)
+}
+
+# Ejecutar modelos para todos los desenlaces
+results_linear <- map_df(outcomes_cont, ~fit_lm_models(df_filtered, .x))
+
+# Limpiar etiquetas
+results_linear <- results_linear %>%
+  mutate(term = recode(term,
+                       "Protein_gkg_day" = "Continuous (g/kg/day)",
+                       "Protein_QuintilesQ2" = "Q2 (0.59–0.81)",
+                       "Protein_QuintilesQ3" = "Q3 (0.82–1.04)",
+                       "Protein_QuintilesQ4" = "Q4 (1.05–1.37)",
+                       "Protein_QuintilesQ5" = "Q5 (>1.37)")) %>%
+  select(Outcome, term, Model, estimate, conf.low, conf.high, p.value)
 
 
 
+# FIGURE 2: Forest plot – Odds Ratios for Accelerated Aging
 
+results_logistic <- results_logistic %>%
+  mutate(Outcome = recode(Outcome,
+                          "TL_AgeAccel" = "Telomere Age Accel",
+                          "AnthropoAgeAccel" = "AnthropoAge Accel",
+                          "PhenoAgeAccel" = "PhenoAge Accel",
+                          "KDMAgeAccel" = "KDM Biological Age Accel"))
+
+# Mantener solo modelo ajustado
+results_plot <- results_logistic %>%
+  filter(Model == "Adjusted") %>%
+  mutate(term = recode(term,
+                       "Protein_gkg_day" = "Continuous (g/kg/day)",
+                       "Protein_QuintilesQ2" = "Q2 (0.59–0.81)",
+                       "Protein_QuintilesQ3" = "Q3 (0.82–1.04)",
+                       "Protein_QuintilesQ4" = "Q4 (1.05–1.37)",
+                       "Protein_QuintilesQ5" = "Q5 (>1.37)")) %>%
+  mutate(term = fct_rev(factor(term, levels = unique(term)))) # invertir orden visual
+
+# Crear forest plot con facet por desenlace
+ggplot(results_plot, aes(x = term, y = OR, ymin = conf.low, ymax = conf.high)) +
+  geom_pointrange(size = 0.5, color = "black") +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  facet_wrap(~Outcome, ncol = 2, scales = "free_y") +
+  scale_y_log10(limits = c(0.2, 5), breaks = c(0.25, 0.5, 1, 2, 4)) +
+  labs(
+    x = "",
+    y = "Odds Ratio (log scale)",
+    title = "Figure 2. Association of dietary protein with accelerated biological aging",
+    subtitle = "Adjusted models for age, sex, energy intake, ethnicity, poverty ratio,\nsmoking, physical activity, hypertension, and diabetes"
+  ) +
+  theme_bw(base_size = 11) +
+  theme(
+    strip.background = element_rect(fill = "gray90", color = NA),
+    strip.text = element_text(face = "bold"),
+    axis.text.y = element_text(size = 9),
+    axis.text.x = element_text(size = 8),
+    plot.title = element_text(face = "bold", size = 12),
+    plot.subtitle = element_text(size = 9)
+  )
 
 
 
