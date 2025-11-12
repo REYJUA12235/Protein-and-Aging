@@ -576,6 +576,99 @@ ggplot(results_plot, aes(x = term, y = OR, ymin = conf.low, ymax = conf.high)) +
 
 
 
+# TABLE 4 – Association between protein intake, biological markers, and all-cause mortality
+
+surv_obj <- Surv(df_filter3$permth_int, df_filter3$mortstat)
+
+# MODELOS PRINCIPALES (univariados y ajustados)
+
+## --- Modelo 1: Protein intake ---
+m1_unadj <- coxph(surv_obj ~ protein_per_kg_per_day, data = df_filter3)
+m1_adj   <- coxph(surv_obj ~ protein_per_kg_per_day + Gender + residuos + Energy_kcal +
+                    Race + Family_PIR + Diabetes_h + Activity + Hypertension + Smoking,
+                  data = df_filter3)
+
+## --- Modelo 2: Telomere length ---
+m2_unadj <- coxph(surv_obj ~ `Mean T/S ratio`, data = df_filter3)
+m2_adj   <- coxph(surv_obj ~ `Mean T/S ratio` + Gender + residuos + Energy_kcal +
+                    Race + Family_PIR + Diabetes_h + Activity + Hypertension + Smoking,
+                  data = df_filter3)
+
+## --- Modelo 3: Protein + Telomere length ---
+m3_unadj <- coxph(surv_obj ~ protein_per_kg_per_day + `Mean T/S ratio`, data = df_filter3)
+m3_adj   <- coxph(surv_obj ~ protein_per_kg_per_day + `Mean T/S ratio` + Gender + residuos +
+                    Energy_kcal + Race + Family_PIR + Diabetes_h + Activity +
+                    Hypertension + Smoking, data = df_filter3)
+
+## --- Modelo 4: AnthropoAge ---
+m4_unadj <- coxph(surv_obj ~ AnthropoAge, data = df_filter3)
+m4_adj   <- coxph(surv_obj ~ AnthropoAge + Gender + residuos + Energy_kcal + Race +
+                    Family_PIR + Diabetes_h + Activity + Hypertension + Smoking,
+                  data = df_filter3)
+
+## --- Modelo 5: Protein + AnthropoAge ---
+m5_unadj <- coxph(surv_obj ~ protein_per_kg_per_day + AnthropoAge, data = df_filter3)
+m5_adj   <- coxph(surv_obj ~ protein_per_kg_per_day + AnthropoAge + Gender + residuos +
+                    Energy_kcal + Race + Family_PIR + Diabetes_h + Activity +
+                    Hypertension + Smoking, data = df_filter3)
+
+## --- Modelo 6: PhenoAge ---
+m6_unadj <- coxph(surv_obj ~ phenoage0, data = df_filter3)
+m6_adj   <- coxph(surv_obj ~ phenoage0 + Gender + residuos + Energy_kcal + Race +
+                    Family_PIR + Diabetes_h + Activity + Hypertension + Smoking,
+                  data = df_filter3)
+
+## --- Modelo 7: Protein + PhenoAge ---
+m7_unadj <- coxph(surv_obj ~ protein_per_kg_per_day + phenoage0, data = df_filter3)
+m7_adj   <- coxph(surv_obj ~ protein_per_kg_per_day + phenoage0 + Gender + residuos +
+                    Energy_kcal + Race + Family_PIR + Diabetes_h + Activity +
+                    Hypertension + Smoking, data = df_filter3)
+
+## --- Modelo 8: KDM ---
+m8_unadj <- coxph(surv_obj ~ kdm, data = df_filter3)
+m8_adj   <- coxph(surv_obj ~ kdm + Gender + residuos + Energy_kcal + Race +
+                    Family_PIR + Diabetes_h + Activity + Hypertension + Smoking,
+                  data = df_filter3)
+
+## --- Modelo 9: Protein + KDM ---
+m9_unadj <- coxph(surv_obj ~ protein_per_kg_per_day + kdm, data = df_filter3)
+m9_adj   <- coxph(surv_obj ~ protein_per_kg_per_day + kdm + Gender + residuos +
+                    Energy_kcal + Race + Family_PIR + Diabetes_h + Activity +
+                    Hypertension + Smoking, data = df_filter3)
+
+get_hr <- function(model, model_name, type) {
+  tidy(model, exponentiate = TRUE, conf.int = TRUE) %>%
+    select(term, estimate, conf.low, conf.high, p.value) %>%
+    mutate(Model = model_name, Type = type)
+}
+
+results_all <- bind_rows(
+  get_hr(m1_unadj, "Protein intake", "Unadjusted"),
+  get_hr(m1_adj,   "Protein intake", "Adjusted"),
+  get_hr(m2_unadj, "Telomere length", "Unadjusted"),
+  get_hr(m2_adj,   "Telomere length", "Adjusted"),
+  get_hr(m3_unadj, "Protein + Telomere length", "Unadjusted"),
+  get_hr(m3_adj,   "Protein + Telomere length", "Adjusted"),
+  get_hr(m4_unadj, "AnthropoAge", "Unadjusted"),
+  get_hr(m4_adj,   "AnthropoAge", "Adjusted"),
+  get_hr(m5_unadj, "Protein + AnthropoAge", "Unadjusted"),
+  get_hr(m5_adj,   "Protein + AnthropoAge", "Adjusted"),
+  get_hr(m6_unadj, "PhenoAge", "Unadjusted"),
+  get_hr(m6_adj,   "PhenoAge", "Adjusted"),
+  get_hr(m7_unadj, "Protein + PhenoAge", "Unadjusted"),
+  get_hr(m7_adj,   "Protein + PhenoAge", "Adjusted"),
+  get_hr(m8_unadj, "KDM", "Unadjusted"),
+  get_hr(m8_adj,   "KDM", "Adjusted"),
+  get_hr(m9_unadj, "Protein + KDM", "Unadjusted"),
+  get_hr(m9_adj,   "Protein + KDM", "Adjusted")
+)
+
+results_all <- results_all %>%
+  mutate(
+    HR_CI = sprintf("%.2f (%.2f – %.2f)", estimate, conf.low, conf.high),
+    Sig = ifelse(p.value < 0.0001, "*", "")
+  ) %>%
+  select(Model, Type, term, HR_CI, Sig)
 
 
 
