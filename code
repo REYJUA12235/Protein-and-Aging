@@ -385,44 +385,6 @@ df_final$Accel_KDM <- BioAge::age_accel(
   bio_age   = df_final$KDM
 
 
-###  Correlación entre métricas de edad biológica y edad cronológica  ##
-df_corr <- df_final[, c(
-  "Age at Screening Adjudicated - Recode",
-  "Mean T/S ratio",
-  "AnthropoAge",
-  "PhenoAge",
-  "KDM"
-)]
-
-df_corr <- df_corr %>%
-  rename(
-    ChronAge = `Age at Screening Adjudicated - Recode`,
-    Telomere = `Mean T/S ratio`
-  )
-ggpairs(df_corr,
-        lower = list(continuous = wrap("points", color = "black")),
-        upper = list(continuous = wrap("cor", size = 5)),
-        diag = list(continuous = wrap("barDiag", fill = "gray"))) +
-  theme_minimal() +
-  labs(title = "Correlación entre edad cronológica y métricas de edad biológica")
-
-metrics <- c("Telomere", "AnthropoAge", "PhenoAge", "KDM")
-
-cor_results <- data.frame(Variable = metrics, r = NA, p_value = NA)
-
-for (i in seq_along(metrics)) {
-  cor_test <- cor.test(df_corr[[metrics[i]]], df_corr$ChronAge, method = "spearman")
-  cor_results$r[i] <- cor_test$estimate
-  cor_results$p_value[i] <- cor_test$p.value
-}
-
-cor_results <- cor_results %>%
-  mutate(
-    r = round(r, 3),
-    p_value = format.pval(p_value, digits = 3, scientific = TRUE)
-  )
-
-
 
 # Table 2 
 
@@ -746,6 +708,216 @@ mediation_results <- lapply(mediators, function(med) {
 mediation_results_df <- do.call(rbind, mediation_results)
 
 print(mediation_results_df)
+
+
+### Analisis suplementario ###
+
+Figura suplementaria 2
+
+###  Correlación entre métricas de edad biológica y edad cronológica  ##
+df_corr <- df_final[, c(
+  "Age at Screening Adjudicated - Recode",
+  "Mean T/S ratio",
+  "AnthropoAge",
+  "PhenoAge",
+  "KDM"
+)]
+
+df_corr <- df_corr %>%
+  rename(
+    ChronAge = `Age at Screening Adjudicated - Recode`,
+    Telomere = `Mean T/S ratio`
+  )
+ggpairs(df_corr,
+        lower = list(continuous = wrap("points", color = "black")),
+        upper = list(continuous = wrap("cor", size = 5)),
+        diag = list(continuous = wrap("barDiag", fill = "gray"))) +
+  theme_minimal() +
+  labs(title = "Correlación entre edad cronológica y métricas de edad biológica")
+
+metrics <- c("Telomere", "AnthropoAge", "PhenoAge", "KDM")
+
+cor_results <- data.frame(Variable = metrics, r = NA, p_value = NA)
+
+for (i in seq_along(metrics)) {
+  cor_test <- cor.test(df_corr[[metrics[i]]], df_corr$ChronAge, method = "spearman")
+  cor_results$r[i] <- cor_test$estimate
+  cor_results$p_value[i] <- cor_test$p.value
+}
+
+cor_results <- cor_results %>%
+  mutate(
+    r = round(r, 3),
+    p_value = format.pval(p_value, digits = 3, scientific = TRUE)
+  )
+
+
+FIGURA SUPLEMENTARIA 3
+
+
+df <- df_filter3                     # tu data.frame
+mediators <- c("Mean T/S ratio", "AnthropoAge", "phenoage0", "kdm")
+outcomes  <- c("Heart_diseases", "Cerebrovascular_diseases", "Malignant_neoplasms")
+exposure  <- "protein_g_per_day"
+covariates <- c("Gender","residuos","Energy_kcal","Race","Family_PIR","Diabetes_h","Activity","Hypertension","Smoking")
+method <- "Cox"   # o "Aalen"
+Gsim <- 1e6       # argumento para mediation_ci1 (si tu función lo usa)
+
+
+make_formula <- function(lhs, rhs_vars){
+  rhs <- paste(rhs_vars, collapse = " + ")
+  as.formula(paste0(lhs, " ~ ", rhs))
+}
+
+results <- data.frame(
+  mediator = character(),
+  outcome = character(),
+  ACME = numeric(), ACME_lci = numeric(), ACME_uci = numeric(),
+  ADE  = numeric(), ADE_lci = numeric(), ADE_uci = numeric(),
+  prop_med = numeric(), prop_med_lci = numeric(), prop_med_uci = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (m in mediators){
+  # mediador como variable (si tiene espacios, usar backticks en fórmulas)
+  med_var <- m
+  for (y in outcomes){
+    out_var <- y
+
+    # 1) Modelo lineal para el mediador (mediador ~ exposure + covs)
+    #   Escalamos exposure y mediador tal como en tus ejemplos
+    lhs_glm <- paste0("scale(`", med_var, "`)")
+    rhs_glm <- c(paste0("scale(", exposure, ")"), covariates)
+    f_glm <- make_formula(lhs_glm, rhs_glm)
+    glm1 <- try(glm(f_glm, data = df), silent = TRUE)
+    if (inherits(glm1, "try-error")){
+      warning("Error en glm para mediador: ", med_var)
+      next
+    }
+
+    # 2) Modelo de supervivencia para el outcome (Cox)
+    #    Usamos Surv(permth_int, outcome)
+    #    Nota: si outcome no es binaria o no está codificada, conviene checar antes
+    surv_lhs <- paste0("Surv(permth_int, ", out_var, ")")
+    rhs_cox <- c(paste0("scale(`", med_var, "`)"), paste0("scale(", exposure, ")"), covariates)
+    f_cox <- make_formula(surv_lhs, rhs_cox)
+    m2 <- try(coxph(f_cox, data = df), silent = TRUE)
+    if (inherits(m2, "try-error")){
+      warning("Error en coxph para outcome: ", out_var)
+      next
+    }
+
+    # 3) Extraer lambdas según método (adaptar si usas Aalen)
+    if (method == "Aalen"){
+      # asumo que la salida de aalen fue calculada antes y se llama aalen2. 
+      # Si no, aquí habría que ejecutar la función que corresponda.
+      if (!exists("aalen2")) stop("Si usas method='Aalen' debes tener 'aalen2' calculado.")
+      lambdas <- aalen2$gamma
+      lambdas.var <- aalen2$robvar.gamma
+    } else if (method == "Cox"){
+      lambdas <- m2$coefficients
+      lambdas.var <- m2$var
+    } else {
+      stop("method no reconocido. Usa 'Cox' o 'Aalen'.")
+    }
+
+    # Asumo que la posición de interest es:
+    #  lambdas[2] = coef de exposure; lambdas[1] = coef del mediador
+    #  Si tu coxph devuelve otro orden, ajústalo.
+    #  Aquí guardo el retorno de mediation_ci1; adaptar según su salida real.
+    med_out <- try(mediation_ci1(
+      lambdas[2], lambdas[1],
+      lambdas.var[2,2], lambdas.var[2,1], lambdas.var[1,1],
+      glm1$coef[2], vcov(glm1)[2,2],
+      G = Gsim, method = method
+    ), silent = TRUE)
+
+    if (inherits(med_out, "try-error")){
+      warning("Error en mediation_ci1 para ", med_var, " -> ", out_var)
+      next
+    }
+
+    if (!all(c("ACME","ACME_lci","ACME_uci","ADE","prop_med") %in% names(med_out))){
+      # intenta inferir o alertar
+      warning("La salida de mediation_ci1 no tiene los nombres esperados. Revisa su estructura.")
+      print(str(med_out))
+      # Intento defensivo: asignar NA y guardar lo que exista
+      ACME <- ifelse("ACME" %in% names(med_out), med_out$ACME, NA)
+      ACME_lci <- ifelse("ACME_lci" %in% names(med_out), med_out$ACME_lci, NA)
+      ACME_uci <- ifelse("ACME_uci" %in% names(med_out), med_out$ACME_uci, NA)
+      ADE <- ifelse("ADE" %in% names(med_out), med_out$ADE, NA)
+      prop_med <- ifelse("prop_med" %in% names(med_out), med_out$prop_med, NA)
+      prop_med_lci <- ifelse("prop_med_lci" %in% names(med_out), med_out$prop_med_lci, NA)
+      prop_med_uci <- ifelse("prop_med_uci" %in% names(med_out), med_out$prop_med_uci, NA)
+    } else {
+      ACME <- med_out$ACME
+      ACME_lci <- med_out$ACME_lci
+      ACME_uci <- med_out$ACME_uci
+      ADE <- med_out$ADE
+      # si tu función retorna ADE_lci/uci y prop_med con CI, ajústalos
+      ADE_lci <- ifelse("ADE_lci" %in% names(med_out), med_out$ADE_lci, NA)
+      ADE_uci <- ifelse("ADE_uci" %in% names(med_out), med_out$ADE_uci, NA)
+      prop_med <- med_out$prop_med
+      prop_med_lci <- ifelse("prop_med_lci" %in% names(med_out), med_out$prop_med_lci, NA)
+      prop_med_uci <- ifelse("prop_med_uci" %in% names(med_out), med_out$prop_med_uci, NA)
+    }
+
+
+#Tabla suplementaria 5
+
+# Librerías necesarias
+library(dplyr)
+library(gtsummary)
+
+# Crear nuevas variables energéticas y proporcionales
+df_filtered <- df_filtered %>%
+  mutate(
+    Energy_from_Protein = `Protein (gm)` * 4,
+    Energy_from_Carbohydrates = `Carbohydrate (gm)` * 4,
+    Energy_from_Fat = `Total fat (gm)` * 9,
+    
+    Pct_Protein_from_Total = (Energy_from_Protein / `Energy (kcal)`) * 100,
+    Pct_Carb_from_Total = (Energy_from_Carbohydrates / `Energy (kcal)`) * 100,
+    Pct_Fat_from_Total = (Energy_from_Fat / `Energy (kcal)`) * 100
+  )
+
+# Variables de interés
+variables <- c(
+  "Energy (kcal)",
+  "Energy_from_Carbohydrates", "Pct_Carb_from_Total", "Carbohydrate (gm)",
+  "Energy_from_Fat", "Pct_Fat_from_Total", "Total fat (gm)",
+  "Energy_from_Protein", "Pct_Protein_from_Total", "Protein (gm)",
+  "protein_per_kg_per_day", "protein_per_kg_IBW_per_day", "protein_status"
+)
+
+# Crear tabla resumen general (sin agrupar)
+tabla_dieta <- df_filtered %>%
+  select(all_of(variables)) %>%
+  tbl_summary(
+    statistic = list(
+      all_continuous() ~ "{median} ({p25}–{p75})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits = all_continuous() ~ 2,
+    label = list(
+      `Energy (kcal)` ~ "Total energy intake (kcal/day)",
+      Energy_from_Carbohydrates ~ "Energy from carbohydrates (kcal/day)",
+      Pct_Carb_from_Total ~ "Carbohydrates (% of total kcal)",
+      `Carbohydrate (gm)` ~ "Carbohydrate intake (g/day)",
+      Energy_from_Fat ~ "Energy from fat (kcal/day)",
+      Pct_Fat_from_Total ~ "Fat (% of total kcal)",
+      `Total fat (gm)` ~ "Total fat intake (g/day)",
+      Energy_from_Protein ~ "Energy from protein (kcal/day)",
+      Pct_Protein_from_Total ~ "Protein (% of total kcal)",
+      `Protein (gm)` ~ "Protein intake (g/day)",
+      protein_per_kg_per_day ~ "Protein per kg of body weight (g/kg/day)",
+      protein_per_kg_IBW_per_day ~ "Protein per kg of ideal body weight (g/kg IBW/day)",
+      protein_status ~ "Protein adequacy"
+    ),
+    missing = "no"
+  ) %>%
+  bold_labels()
+
 
 
 
